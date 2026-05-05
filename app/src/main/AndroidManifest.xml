@@ -61,10 +61,5 @@
             android:exported="false"
             android:foregroundServiceType="microphone|camera" />
 
-        <provider
-            android:name="androidx.startup.InitializationProvider"
-            android:authorities="${applicationId}.androidx-startup"
-            android:exported="false"
-            tools:node="merge" />
     </application>
 </manifest>

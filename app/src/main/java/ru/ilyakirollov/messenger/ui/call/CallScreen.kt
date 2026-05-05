@@ -97,15 +97,6 @@ fun CallScreen(
         }
     }
 
-    val callee = when {
-        session?.callerId == viewModel.session.value?.callerId && session?.callerId == null -> ""
-        else -> {
-            val sess = session
-            if (sess == null) "" else if (sess.callerId == sess.callerId)
-                if (isCaller) sess.calleeNickname else sess.callerNickname
-            else ""
-        }
-    }
     val displayName = if (isCaller) session?.calleeNickname.orEmpty() else session?.callerNickname.orEmpty()
     val ringing = session?.status == CallSession.STATUS_RINGING
     val incomingNotAnswered = ringing && !isCaller
