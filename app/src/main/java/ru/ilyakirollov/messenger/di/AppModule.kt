@@ -7,8 +7,6 @@ import com.google.firebase.firestore.ktx.firestore
 import com.google.firebase.ktx.Firebase
 import com.google.firebase.messaging.FirebaseMessaging
 import com.google.firebase.messaging.ktx.messaging
-import com.google.firebase.storage.FirebaseStorage
-import com.google.firebase.storage.ktx.storage
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -20,6 +18,5 @@ import javax.inject.Singleton
 object AppModule {
     @Provides @Singleton fun provideAuth(): FirebaseAuth = Firebase.auth
     @Provides @Singleton fun provideFirestore(): FirebaseFirestore = Firebase.firestore
-    @Provides @Singleton fun provideStorage(): FirebaseStorage = Firebase.storage
     @Provides @Singleton fun provideMessaging(): FirebaseMessaging = Firebase.messaging
 }

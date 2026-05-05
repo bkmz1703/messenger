@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -6,6 +8,17 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.hilt)
 }
+
+// Cloudinary configuration is read from local.properties (gitignored). Set:
+//   cloudinary.cloudName=<your-cloud-name>
+//   cloudinary.uploadPreset=<your-unsigned-preset>
+// to enable media uploads. Without these the app builds but media sending will fail at runtime.
+val cloudinaryProps = Properties().apply {
+    val f = rootProject.file("local.properties")
+    if (f.exists()) f.inputStream().use { load(it) }
+}
+val cloudinaryCloudName: String = cloudinaryProps.getProperty("cloudinary.cloudName", "")
+val cloudinaryUploadPreset: String = cloudinaryProps.getProperty("cloudinary.uploadPreset", "")
 
 // Apply google-services only when google-services.json is present so the project can be cloned
 // and built without a Firebase config (the auth/firestore calls will fail at runtime, but the
@@ -27,6 +40,9 @@ android {
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }
+
+        buildConfigField("String", "CLOUDINARY_CLOUD_NAME", "\"$cloudinaryCloudName\"")
+        buildConfigField("String", "CLOUDINARY_UPLOAD_PRESET", "\"$cloudinaryUploadPreset\"")
     }
 
     buildTypes {
@@ -89,7 +105,6 @@ dependencies {
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.auth)
     implementation(libs.firebase.firestore)
-    implementation(libs.firebase.storage)
     implementation(libs.firebase.messaging)
     implementation(libs.firebase.analytics)
 
@@ -103,6 +118,8 @@ dependencies {
     implementation(libs.accompanist.permissions)
 
     implementation(libs.webrtc)
+
+    implementation(libs.okhttp)
 }
 
 kapt {

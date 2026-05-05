@@ -9,7 +9,8 @@
 | UI | Jetpack Compose, Material 3, Navigation Compose |
 | DI | Hilt |
 | Async | Kotlin Coroutines + Flow |
-| Хранение / Auth | Firebase Auth (Anonymous), Firestore, Storage, Cloud Messaging |
+| Хранение / Auth | Firebase Auth (Anonymous), Firestore, Cloud Messaging |
+| Медиа-хостинг | [Cloudinary](https://cloudinary.com) (free-tier, unsigned upload) |
 | Звонки | WebRTC (`io.getstream:stream-webrtc-android`) + Firestore signaling |
 | Изображения | Coil |
 | Локальные настройки | Jetpack DataStore |
@@ -47,13 +48,30 @@ app/src/main/java/ru/ilyakirollov/messenger/
 
 1. Создайте проект в [Firebase Console](https://console.firebase.google.com).
 2. **Authentication → Sign-in method → Anonymous → Enable.**
-3. **Firestore Database → Create database** (любой регион). Импортируйте правила из [`firebase/firestore.rules`](firebase/firestore.rules) и индексы из [`firebase/firestore.indexes.json`](firebase/firestore.indexes.json).
-4. **Storage → Get started.** Импортируйте правила из [`firebase/storage.rules`](firebase/storage.rules).
-5. **Cloud Messaging** — включите для пуш-уведомлений.
-6. Добавьте Android-приложение в проекте Firebase с **package name `ru.ilyakirollov.messenger`**, скачайте `google-services.json` и положите в `app/google-services.json` (файл в `.gitignore`, в репозиторий не попадает).
-7. (Для пушей) задеплойте Cloud Function из [`firebase/functions`](firebase/functions) — она шлёт FCM-уведомления собеседникам при появлении новых сообщений и звонков. Без неё пуши работать не будут, остальное — да.
+3. **Firestore Database → Create database** (любой регион, production mode). Импортируйте правила из [`firebase/firestore.rules`](firebase/firestore.rules) и индексы из [`firebase/firestore.indexes.json`](firebase/firestore.indexes.json).
+4. **Cloud Messaging** — включается автоматически, отдельных настроек не нужно.
+5. Добавьте Android-приложение в проекте Firebase с **package name `ru.ilyakirollov.messenger`**, скачайте `google-services.json` и положите в `app/google-services.json` (файл в `.gitignore`, в репозиторий не попадает).
+6. (Опционально, требует Blaze-плана) задеплойте Cloud Function из [`firebase/functions`](firebase/functions) — она шлёт FCM-уведомления собеседникам при появлении новых сообщений и звонков. Без неё пуши работать не будут, остальное — да.
 
 После добавления `google-services.json` Gradle-плагин включится автоматически (см. [`app/build.gradle.kts`](app/build.gradle.kts)).
+
+> Firebase Storage **не используется**. Для медиа-файлов (фото/видео/голосовые/файлы) используется Cloudinary — см. ниже.
+
+## Настройка Cloudinary (медиа-аплоады)
+
+Cloudinary заменяет Firebase Storage и работает на free-tier без привязки карты.
+
+1. Зарегистрируйтесь на [cloudinary.com](https://cloudinary.com/users/register_free) (можно через Google).
+2. На Dashboard в правом верхнем углу запишите **Cloud name** (вида `dxx123abc`).
+3. **Settings → Upload → Upload presets → Add upload preset.** Имя — например `messenger_unsigned`, **Signing Mode = Unsigned** (важно). Сохраните.
+4. Положите в файл `local.properties` (он gitignored, лежит рядом с `settings.gradle.kts`) две строки:
+   ```properties
+   cloudinary.cloudName=<ваш cloud name>
+   cloudinary.uploadPreset=messenger_unsigned
+   ```
+5. Пересоберите проект — значения попадут в `BuildConfig.CLOUDINARY_CLOUD_NAME` / `BuildConfig.CLOUDINARY_UPLOAD_PRESET` и подхватятся в [`CloudinaryUploader`](app/src/main/java/ru/ilyakirollov/messenger/data/upload/CloudinaryUploader.kt).
+
+Без этих настроек приложение собирается, но отправка медиа упадёт с ошибкой «Cloudinary не сконфигурирован».
 
 ## Сборка
 
@@ -78,7 +96,7 @@ APK собирается в `app/build/outputs/apk/debug/app-debug.apk`.
 - [x] Поиск пользователей по нику и создание 1-на-1 чата
 - [x] Создание группового чата
 - [x] Текстовые сообщения (read receipts через `readBy`)
-- [x] Отправка фото / видео / файлов через системный пикер
+- [x] Отправка фото / видео / файлов через системный пикер (через Cloudinary)
 - [x] Запись и отправка голосовых сообщений (hold-to-record)
 - [x] Статусы с фоном или картинкой; авто-исчезание через 24ч (фильтр на клиенте, GC через TTL)
 - [x] Аудио и видео-звонки 1-на-1 через WebRTC + Firestore signaling

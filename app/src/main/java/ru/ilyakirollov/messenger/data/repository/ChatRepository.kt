@@ -6,7 +6,6 @@ import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
 import com.google.firebase.firestore.SetOptions
-import com.google.firebase.storage.FirebaseStorage
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.channels.awaitClose
@@ -17,11 +16,13 @@ import ru.ilyakirollov.messenger.data.model.Chat
 import ru.ilyakirollov.messenger.data.model.Message
 import ru.ilyakirollov.messenger.data.model.MessageType
 import ru.ilyakirollov.messenger.data.model.User
+import ru.ilyakirollov.messenger.data.upload.CloudinaryResourceType
+import ru.ilyakirollov.messenger.data.upload.CloudinaryUploader
 
 @Singleton
 class ChatRepository @Inject constructor(
     private val firestore: FirebaseFirestore,
-    private val storage: FirebaseStorage,
+    private val uploader: CloudinaryUploader,
 ) {
     fun observeChats(uid: String): Flow<List<Chat>> = callbackFlow {
         val reg = firestore.collection("chats")
@@ -127,16 +128,15 @@ class ChatRepository @Inject constructor(
         fileSize: Long = 0L,
         previewLabel: String,
     ) {
-        val ext = fileName?.substringAfterLast('.', "")?.takeIf { it.isNotBlank() } ?: when (type) {
-            MessageType.IMAGE -> "jpg"
-            MessageType.VIDEO -> "mp4"
-            MessageType.VOICE -> "m4a"
-            else -> "bin"
+        val resourceType = when (type) {
+            MessageType.IMAGE -> CloudinaryResourceType.IMAGE
+            // Cloudinary handles audio under the "video" resource type (m4a, mp3, ogg, wav).
+            MessageType.VIDEO, MessageType.VOICE -> CloudinaryResourceType.VIDEO
+            else -> CloudinaryResourceType.AUTO
         }
-        val path = "chats/$chatId/${System.currentTimeMillis()}_${sender.uid}.$ext"
-        val ref = storage.reference.child(path)
-        ref.putFile(uri).await()
-        val url = ref.downloadUrl.await().toString()
+        val displayName = fileName?.takeIf { it.isNotBlank() }
+            ?: "chat_${chatId}_${System.currentTimeMillis()}"
+        val result = uploader.upload(uri, resourceType, displayName)
 
         sendMessage(
             chatId,
@@ -145,11 +145,11 @@ class ChatRepository @Inject constructor(
                 senderNickname = sender.nickname,
                 type = type.value,
                 text = "",
-                mediaUrl = url,
-                mediaPath = path,
+                mediaUrl = result.secureUrl,
+                mediaPath = result.publicId,
                 durationMs = durationMs,
                 fileName = fileName,
-                fileSize = fileSize,
+                fileSize = if (fileSize > 0) fileSize else result.bytes,
             ),
             preview = previewLabel,
         )
