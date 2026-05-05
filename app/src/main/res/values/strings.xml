@@ -1,0 +1,62 @@
+<resources>
+    <string name="app_name">Месенжер</string>
+
+    <!-- Auth -->
+    <string name="login_title">Добро пожаловать</string>
+    <string name="login_subtitle">Введите ник, чтобы начать общение</string>
+    <string name="nickname_hint">Ник</string>
+    <string name="continue_button">Продолжить</string>
+    <string name="signing_in">Вход…</string>
+
+    <!-- Tabs -->
+    <string name="tab_chats">Чаты</string>
+    <string name="tab_status">Статусы</string>
+    <string name="tab_calls">Звонки</string>
+    <string name="tab_profile">Профиль</string>
+
+    <!-- Chats -->
+    <string name="chats_empty">Пока нет чатов. Найдите собеседника по нику.</string>
+    <string name="new_chat">Новый чат</string>
+    <string name="search_user_hint">Найти по нику</string>
+    <string name="message_hint">Сообщение</string>
+    <string name="hold_to_record">Удерживайте для записи</string>
+    <string name="recording">Запись…</string>
+    <string name="attach">Прикрепить</string>
+    <string name="send">Отправить</string>
+    <string name="online">в сети</string>
+    <string name="offline">был(а) недавно</string>
+    <string name="typing">печатает…</string>
+
+    <!-- Status -->
+    <string name="status_my">Мой статус</string>
+    <string name="status_add">Добавить статус</string>
+    <string name="status_caption_hint">Подпись</string>
+    <string name="status_recent">Свежие</string>
+    <string name="status_empty">Никто ещё не публиковал статусы</string>
+
+    <!-- Calls -->
+    <string name="calls_empty">История звонков пуста</string>
+    <string name="incoming_call">Входящий звонок</string>
+    <string name="outgoing_call">Исходящий звонок</string>
+    <string name="call_audio">Аудио</string>
+    <string name="call_video">Видео</string>
+    <string name="call_decline">Отклонить</string>
+    <string name="call_accept">Принять</string>
+    <string name="call_end">Завершить</string>
+    <string name="call_mute">Микрофон</string>
+    <string name="call_camera">Камера</string>
+    <string name="call_switch_camera">Сменить камеру</string>
+    <string name="call_speaker">Громкая связь</string>
+    <string name="call_in_progress">Звонок в процессе…</string>
+
+    <!-- Profile -->
+    <string name="profile_logout">Выйти</string>
+    <string name="profile_change_nickname">Сменить ник</string>
+
+    <!-- Notification -->
+    <string name="channel_messages_name">Сообщения</string>
+    <string name="channel_messages_desc">Уведомления о новых сообщениях</string>
+    <string name="channel_calls_name">Звонки</string>
+    <string name="channel_calls_desc">Уведомления о входящих звонках</string>
+    <string name="ongoing_call_title">Идёт звонок</string>
+</resources>

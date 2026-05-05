@@ -1,0 +1,72 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helpers
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isSelf(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    function isParticipant(chat) {
+      return isSignedIn() && request.auth.uid in chat.participants;
+    }
+
+    // Users: anyone authenticated can read profiles (needed for nickname search);
+    // only the owner can write their own profile.
+    match /users/{uid} {
+      allow read: if isSignedIn();
+      allow create, update: if isSelf(uid);
+      allow delete: if isSelf(uid);
+    }
+
+    // Chats: only participants can read/write.
+    match /chats/{chatId} {
+      allow read: if isParticipant(resource.data);
+      allow create: if isSignedIn() && request.auth.uid in request.resource.data.participants;
+      allow update: if isParticipant(resource.data);
+      allow delete: if isParticipant(resource.data);
+
+      match /messages/{messageId} {
+        allow read: if isParticipant(get(/databases/$(database)/documents/chats/$(chatId)).data);
+        allow create: if isSignedIn()
+          && request.resource.data.senderId == request.auth.uid
+          && request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participants;
+        allow update: if isSignedIn()
+          && request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participants;
+        allow delete: if isSignedIn() && resource.data.senderId == request.auth.uid;
+      }
+    }
+
+    // Statuses: any signed-in user can read recent statuses, owner-only writes.
+    match /statuses/{statusId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && request.resource.data.authorId == request.auth.uid;
+      allow update: if isSignedIn() && (
+        // Owner can update text/media; anyone signed-in can append themselves to the viewers list.
+        resource.data.authorId == request.auth.uid ||
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['viewers'])
+      );
+      allow delete: if isSignedIn() && resource.data.authorId == request.auth.uid;
+    }
+
+    // Calls: caller and callee can read/write.
+    match /calls/{callId} {
+      function isParty(call) {
+        return isSignedIn() && (request.auth.uid == call.callerId || request.auth.uid == call.calleeId);
+      }
+      allow read: if isParty(resource.data);
+      allow create: if isSignedIn() && request.resource.data.callerId == request.auth.uid;
+      allow update: if isParty(resource.data);
+      allow delete: if isParty(resource.data);
+
+      match /candidates/{candidateId} {
+        allow read, write: if isParty(get(/databases/$(database)/documents/calls/$(callId)).data);
+      }
+    }
+  }
+}

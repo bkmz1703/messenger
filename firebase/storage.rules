@@ -1,0 +1,23 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // Chat media: any signed-in chat participant can read; anyone signed-in
+    // can upload files up to 25MB. (Tighten as needed by validating against
+    // the chat's participants map.)
+    match /chats/{chatId}/{file=**} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn() && request.resource.size < 25 * 1024 * 1024;
+    }
+
+    match /statuses/{userId}/{file=**} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn() && request.auth.uid == userId
+        && request.resource.size < 25 * 1024 * 1024;
+    }
+  }
+}
