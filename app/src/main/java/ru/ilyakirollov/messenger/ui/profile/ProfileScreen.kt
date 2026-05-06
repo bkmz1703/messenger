@@ -59,6 +59,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import ru.ilyakirollov.messenger.BuildConfig
 import ru.ilyakirollov.messenger.R
 import ru.ilyakirollov.messenger.ui.components.Avatar
 
@@ -173,7 +174,7 @@ fun ProfileScreen(
                         )
                     }
                 }
-            } else {
+            } else if (BuildConfig.PHONE_AUTH_ENABLED) {
                 OutlinedButton(
                     onClick = { viewModel.startPhoneLink() },
                     modifier = Modifier.fillMaxWidth(),
@@ -182,6 +183,21 @@ fun ProfileScreen(
                     Spacer(Modifier.size(8.dp))
                     Text(stringResource(R.string.profile_link_phone))
                 }
+            } else {
+                OutlinedButton(
+                    onClick = {},
+                    enabled = false,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Icon(Icons.Default.Phone, contentDescription = null)
+                    Spacer(Modifier.size(8.dp))
+                    Text(stringResource(R.string.profile_link_phone))
+                }
+                Text(
+                    stringResource(R.string.feature_unavailable),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
 
             Spacer(Modifier.size(8.dp))

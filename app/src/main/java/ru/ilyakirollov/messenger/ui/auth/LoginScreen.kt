@@ -39,6 +39,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import ru.ilyakirollov.messenger.BuildConfig
 import ru.ilyakirollov.messenger.R
 
 private enum class LoginMode { Nickname, Phone }
@@ -124,16 +125,34 @@ fun LoginScreen(
                     Spacer(Modifier.height(16.dp))
                     HorizontalDivider()
                     Spacer(Modifier.height(8.dp))
-                    OutlinedButton(
-                        onClick = {
-                            viewModel.resetPhoneFlow()
-                            mode = LoginMode.Phone
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        Icon(Icons.Default.Phone, contentDescription = null)
-                        Spacer(Modifier.size(8.dp))
-                        Text(stringResource(R.string.login_with_phone))
+                    if (BuildConfig.PHONE_AUTH_ENABLED) {
+                        OutlinedButton(
+                            onClick = {
+                                viewModel.resetPhoneFlow()
+                                mode = LoginMode.Phone
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Icon(Icons.Default.Phone, contentDescription = null)
+                            Spacer(Modifier.size(8.dp))
+                            Text(stringResource(R.string.login_with_phone))
+                        }
+                    } else {
+                        OutlinedButton(
+                            onClick = {},
+                            enabled = false,
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Icon(Icons.Default.Phone, contentDescription = null)
+                            Spacer(Modifier.size(8.dp))
+                            Text(stringResource(R.string.login_with_phone))
+                        }
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            stringResource(R.string.feature_unavailable),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
                     }
                 } else {
                     PhoneAuthBlock(

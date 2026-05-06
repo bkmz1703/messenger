@@ -43,6 +43,9 @@ android {
 
         buildConfigField("String", "CLOUDINARY_CLOUD_NAME", "\"$cloudinaryCloudName\"")
         buildConfigField("String", "CLOUDINARY_UPLOAD_PRESET", "\"$cloudinaryUploadPreset\"")
+        // Firebase Phone Auth requires the Blaze (paid) plan. Keep it off for now and show
+        // a "feature unavailable" notice in the UI; flip to true once Blaze is enabled.
+        buildConfigField("boolean", "PHONE_AUTH_ENABLED", "false")
     }
 
     // Pin debug signing to a project-local keystore so the APK SHA-1 is reproducible across CI

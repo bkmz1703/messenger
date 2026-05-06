@@ -81,6 +81,7 @@
     <string name="search_no_results">Никого не нашли</string>
 
     <!-- Phone auth -->
+    <string name="feature_unavailable">Функция временно недоступна</string>
     <string name="profile_link_phone">Привязать номер телефона</string>
     <string name="profile_phone_linked">Привязан номер</string>
     <string name="login_with_phone">Войти по номеру телефона</string>
