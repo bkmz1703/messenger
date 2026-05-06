@@ -6,6 +6,7 @@ import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
 import com.google.firebase.firestore.SetOptions
+import java.util.Date
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.channels.awaitClose
@@ -25,13 +26,14 @@ class ChatRepository @Inject constructor(
     private val uploader: CloudinaryUploader,
 ) {
     fun observeChats(uid: String): Flow<List<Chat>> = callbackFlow {
+        // Sort client-side so the query needs no composite index and so freshly-created chats
+        // (which still have a null lastMessageAt locally) remain visible.
         val reg = firestore.collection("chats")
             .whereArrayContains("participants", uid)
-            .orderBy("lastMessageAt", Query.Direction.DESCENDING)
             .addSnapshotListener { snap, _ ->
                 val list = snap?.documents.orEmpty().mapNotNull { d ->
                     d.toObject(Chat::class.java)?.apply { id = d.id }
-                }
+                }.sortedByDescending { it.lastMessageAt ?: it.createdAt ?: Date(0) }
                 trySend(list)
             }
         awaitClose { reg.remove() }

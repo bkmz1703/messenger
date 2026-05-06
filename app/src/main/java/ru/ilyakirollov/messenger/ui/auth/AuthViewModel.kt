@@ -39,8 +39,9 @@ class AuthViewModel @Inject constructor(
     val state: StateFlow<AuthState> = combine(authFlow, nicknameFlow, colorFlow) { uid, nick, color ->
         when {
             uid != null && !nick.isNullOrBlank() -> AuthState.Authenticated(uid, nick, color ?: 0xFF0F9D58)
-            uid == null -> AuthState.Unauthenticated
-            else -> AuthState.Loading
+            // Treat "Firebase user exists but nickname not picked yet" the same as not signed in,
+            // so the LoginScreen is shown instead of a blank Loading state.
+            else -> AuthState.Unauthenticated
         }
     }.stateIn(viewModelScope, SharingStarted.Eagerly, AuthState.Loading)
 
@@ -65,6 +66,13 @@ class AuthViewModel @Inject constructor(
     fun signOut() {
         viewModelScope.launch {
             runCatching { authRepository.signOut() }
+            preferences.clear()
+        }
+    }
+
+    fun forgetAccount() {
+        viewModelScope.launch {
+            runCatching { authRepository.forgetAccount() }
             preferences.clear()
         }
     }

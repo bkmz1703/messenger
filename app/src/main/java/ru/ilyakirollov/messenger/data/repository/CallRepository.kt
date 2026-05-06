@@ -2,8 +2,8 @@ package ru.ilyakirollov.messenger.data.repository
 
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
-import com.google.firebase.firestore.Query
 import com.google.firebase.firestore.SetOptions
+import java.util.Date
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.channels.awaitClose
@@ -89,32 +89,48 @@ class CallRepository @Inject constructor(
     }
 
     fun observeIncoming(uid: String): Flow<CallSession?> = callbackFlow {
+        // Filter & sort client-side so we don't depend on a composite index in Firestore.
         val reg = calls
             .whereEqualTo("calleeId", uid)
-            .whereEqualTo("status", CallSession.STATUS_RINGING)
-            .orderBy("createdAt", Query.Direction.DESCENDING)
-            .limit(1)
             .addSnapshotListener { snap, _ ->
-                val first = snap?.documents?.firstOrNull()
-                trySend(first?.toObject(CallSession::class.java)?.apply { id = first.id })
+                val ringing = snap?.documents.orEmpty().mapNotNull { d ->
+                    d.toObject(CallSession::class.java)?.apply { id = d.id }
+                }.filter { it.status == CallSession.STATUS_RINGING }
+                    .maxByOrNull { it.createdAt ?: Date(0) }
+                trySend(ringing)
             }
         awaitClose { reg.remove() }
     }
 
     fun observeHistory(uid: String): Flow<List<CallSession>> = callbackFlow {
-        val reg = calls
-            .where(com.google.firebase.firestore.Filter.or(
-                com.google.firebase.firestore.Filter.equalTo("callerId", uid),
-                com.google.firebase.firestore.Filter.equalTo("calleeId", uid),
-            ))
-            .orderBy("createdAt", Query.Direction.DESCENDING)
-            .limit(50)
+        // Use two simple queries (caller + callee) and merge client-side; this avoids the
+        // composite OR-index requirement and works without any Firestore index setup.
+        var callerSnapshot: List<CallSession> = emptyList()
+        var calleeSnapshot: List<CallSession> = emptyList()
+
+        fun merge(): List<CallSession> =
+            (callerSnapshot + calleeSnapshot)
+                .distinctBy { it.id }
+                .sortedByDescending { it.createdAt ?: Date(0) }
+                .take(50)
+
+        val asCaller = calls.whereEqualTo("callerId", uid)
             .addSnapshotListener { snap, _ ->
-                val list = snap?.documents.orEmpty().mapNotNull { d ->
+                callerSnapshot = snap?.documents.orEmpty().mapNotNull { d ->
                     d.toObject(CallSession::class.java)?.apply { id = d.id }
                 }
-                trySend(list)
+                trySend(merge())
             }
-        awaitClose { reg.remove() }
+        val asCallee = calls.whereEqualTo("calleeId", uid)
+            .addSnapshotListener { snap, _ ->
+                calleeSnapshot = snap?.documents.orEmpty().mapNotNull { d ->
+                    d.toObject(CallSession::class.java)?.apply { id = d.id }
+                }
+                trySend(merge())
+            }
+        awaitClose {
+            asCaller.remove()
+            asCallee.remove()
+        }
     }
 }

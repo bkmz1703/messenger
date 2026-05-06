@@ -32,8 +32,15 @@ class AuthRepository @Inject constructor(
         require(sanitized.isNotBlank()) { "Никнейм не может быть пустым" }
         require(sanitized.length in 2..32) { "Никнейм должен быть от 2 до 32 символов" }
 
-        val result = auth.signInAnonymously().await()
-        val uid = result.user?.uid ?: error("Не удалось войти")
+        // Reuse existing anonymous user if Firebase already remembers one. This is critical:
+        // creating a fresh anonymous account on every login would orphan all previous chats.
+        val existing = auth.currentUser
+        val uid = if (existing != null) {
+            existing.uid
+        } else {
+            val result = auth.signInAnonymously().await()
+            result.user?.uid ?: error("Не удалось войти")
+        }
 
         val token = runCatching { messaging.token.await() }.getOrNull()
         val user = User(
@@ -45,6 +52,7 @@ class AuthRepository @Inject constructor(
             online = true,
         )
         firestore.collection("users").document(uid).set(user, SetOptions.merge()).await()
+        propagateUserToChats(uid, sanitized, color)
         return user
     }
 
@@ -59,6 +67,16 @@ class AuthRepository @Inject constructor(
             ),
             SetOptions.merge(),
         ).await()
+        propagateUserToChats(uid, nickname = sanitized, color = null)
+    }
+
+    suspend fun updateAvatarColor(color: Long) {
+        val uid = currentUid ?: return
+        firestore.collection("users").document(uid).set(
+            mapOf("avatarColor" to color),
+            SetOptions.merge(),
+        ).await()
+        propagateUserToChats(uid, nickname = null, color = color)
     }
 
     suspend fun updatePresence(online: Boolean) {
@@ -77,16 +95,54 @@ class AuthRepository @Inject constructor(
         ).await()
     }
 
+    /**
+     * Local-only sign out: clears prefs but keeps the Firebase anonymous credential. Calling
+     * `signInAnonymously` afterwards will reuse the same UID, so the user keeps their chats.
+     * Use [forgetAccount] to fully drop the anonymous account.
+     */
     suspend fun signOut() {
+        runCatching { updatePresence(online = false) }
+    }
+
+    /**
+     * Hard reset: signs the anonymous user out for real. The next sign-in produces a brand new
+     * UID, so any existing chats will no longer be visible to this device.
+     */
+    suspend fun forgetAccount() {
         runCatching { updatePresence(online = false) }
         auth.signOut()
     }
 
-    fun randomAvatarColor(): Long {
-        val palette = listOf(
+    private suspend fun propagateUserToChats(uid: String, nickname: String?, color: Long?) {
+        if (nickname == null && color == null) return
+        val chats = runCatching {
+            firestore.collection("chats")
+                .whereArrayContains("participants", uid)
+                .get()
+                .await()
+        }.getOrNull() ?: return
+
+        if (chats.isEmpty) return
+        val updates = mutableMapOf<String, Any>()
+        if (nickname != null) updates["participantNicknames.$uid"] = nickname
+        if (color != null) updates["participantColors.$uid"] = color
+
+        firestore.runBatch { batch ->
+            chats.documents.forEach { doc ->
+                batch.update(doc.reference, updates)
+            }
+        }.await()
+    }
+
+    fun randomAvatarColor(): Long = avatarPalette[Random.nextInt(avatarPalette.size)]
+
+    fun avatarColors(): List<Long> = avatarPalette
+
+    companion object {
+        private val avatarPalette = listOf(
             0xFF0F9D58, 0xFF1976D2, 0xFFE53935, 0xFF8E24AA, 0xFFFB8C00,
             0xFF00897B, 0xFF3949AB, 0xFFD81B60, 0xFF6D4C41, 0xFF455A64,
+            0xFF2E7D32, 0xFF6A1B9A, 0xFFF4511E, 0xFF00838F, 0xFF5D4037,
         )
-        return palette[Random.nextInt(palette.size)]
     }
 }
