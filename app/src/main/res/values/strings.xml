@@ -1,0 +1,102 @@
+<resources>
+    <string name="app_name">Месенжер</string>
+
+    <!-- Auth -->
+    <string name="login_title">Добро пожаловать</string>
+    <string name="login_subtitle">Введите ник, чтобы начать общение</string>
+    <string name="nickname_hint">Ник</string>
+    <string name="continue_button">Продолжить</string>
+    <string name="signing_in">Вход…</string>
+
+    <!-- Tabs -->
+    <string name="tab_chats">Чаты</string>
+    <string name="tab_status">Статусы</string>
+    <string name="tab_calls">Звонки</string>
+    <string name="tab_profile">Профиль</string>
+
+    <!-- Chats -->
+    <string name="chats_empty">Пока нет чатов. Найдите собеседника по нику.</string>
+    <string name="new_chat">Новый чат</string>
+    <string name="search_user_hint">Найти по нику</string>
+    <string name="message_hint">Сообщение</string>
+    <string name="hold_to_record">Удерживайте для записи</string>
+    <string name="recording">Запись…</string>
+    <string name="attach">Прикрепить</string>
+    <string name="send">Отправить</string>
+    <string name="online">в сети</string>
+    <string name="offline">был(а) недавно</string>
+    <string name="typing">печатает…</string>
+
+    <!-- Status -->
+    <string name="status_my">Мой статус</string>
+    <string name="status_add">Добавить статус</string>
+    <string name="status_caption_hint">Подпись</string>
+    <string name="status_recent">Свежие</string>
+    <string name="status_empty">Никто ещё не публиковал статусы</string>
+
+    <!-- Calls -->
+    <string name="calls_empty">История звонков пуста</string>
+    <string name="incoming_call">Входящий звонок</string>
+    <string name="outgoing_call">Исходящий звонок</string>
+    <string name="call_audio">Аудио</string>
+    <string name="call_video">Видео</string>
+    <string name="call_decline">Отклонить</string>
+    <string name="call_accept">Принять</string>
+    <string name="call_end">Завершить</string>
+    <string name="call_mute">Микрофон</string>
+    <string name="call_camera">Камера</string>
+    <string name="call_switch_camera">Сменить камеру</string>
+    <string name="call_speaker">Громкая связь</string>
+    <string name="call_in_progress">Звонок в процессе…</string>
+
+    <!-- Profile -->
+    <string name="profile_logout">Выйти</string>
+    <string name="profile_change_nickname">Сменить ник</string>
+    <string name="profile_change_avatar">Сменить цвет аватара</string>
+    <string name="profile_change_photo">Загрузить фото из галереи</string>
+    <string name="profile_clear_photo">Убрать фото</string>
+    <string name="cancel">Отмена</string>
+    <string name="close">Закрыть</string>
+    <string name="delete">Удалить</string>
+    <string name="save">Сохранить</string>
+    <string name="status_delete_title">Удалить статус?</string>
+    <string name="status_delete_message">Это действие нельзя отменить.</string>
+
+    <!-- Chat actions -->
+    <string name="chat_actions">Действия</string>
+    <string name="chat_change_title">Сменить название</string>
+    <string name="chat_change_photo">Сменить фото чата</string>
+    <string name="chat_clear_photo">Убрать фото чата</string>
+    <string name="chat_delete">Удалить чат</string>
+    <string name="chat_delete_title">Удалить чат?</string>
+    <string name="chat_delete_message">Удалятся все сообщения. Это действие нельзя отменить.</string>
+    <string name="chat_title_hint">Название</string>
+
+    <!-- Channel -->
+    <string name="channel_readonly_notice">Только администратор канала может публиковать сообщения здесь.</string>
+    <string name="error_nickname_taken">Этот ник уже занят</string>
+
+    <!-- Calls -->
+    <string name="call_new">Новый звонок</string>
+    <string name="search_no_results">Никого не нашли</string>
+
+    <!-- Phone auth -->
+    <string name="feature_unavailable">Функция временно недоступна</string>
+    <string name="profile_link_phone">Привязать номер телефона</string>
+    <string name="profile_phone_linked">Привязан номер</string>
+    <string name="login_with_phone">Войти по номеру телефона</string>
+    <string name="phone_enter_number">Введите номер в формате +79161234567 — на него придёт SMS с кодом.</string>
+    <string name="phone_hint">Номер телефона</string>
+    <string name="phone_send_sms">Отправить SMS</string>
+    <string name="phone_enter_sms">Введите код из SMS, который пришёл на ваш номер.</string>
+    <string name="phone_sms_hint">Код из SMS</string>
+    <string name="phone_confirm">Подтвердить</string>
+    <string name="phone_pick_nickname">Готово! Осталось выбрать ник, под которым вас увидят другие.</string>
+
+    <!-- Notification -->
+    <string name="channel_messages_name">Сообщения</string>
+    <string name="channel_messages_desc">Уведомления о новых сообщениях</string>
+    <string name="channel_calls_name">Звонки</string>
+    <string name="channel_calls_desc">Уведомления о входящих звонках</string>
+    <string name="ongoing_call_title">Идёт звонок</string>
+</resources>

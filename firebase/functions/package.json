@@ -1,0 +1,17 @@
+{
+  "name": "messenger-functions",
+  "description": "Cloud Functions: send FCM push notifications on new messages and calls.",
+  "scripts": {
+    "build": "echo 'No build step (plain JS).'",
+    "deploy": "firebase deploy --only functions"
+  },
+  "engines": {
+    "node": "20"
+  },
+  "main": "index.js",
+  "dependencies": {
+    "firebase-admin": "^12.5.0",
+    "firebase-functions": "^5.1.0"
+  },
+  "private": true
+}

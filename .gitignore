@@ -1,0 +1,38 @@
+# Gradle
+.gradle/
+build/
+**/build/
+out/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+local.properties
+captures/
+
+# Kotlin
+.kotlin/
+
+# Android
+*.apk
+*.ap_
+*.aab
+.cxx/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Firebase service file (must be supplied by user)
+app/google-services.json
+
+# Keystores. The project-local app/debug.keystore IS committed (see exception below) so the
+# debug-build SHA-1 stays stable across CI runs — required for Firebase Phone Auth.
+*.jks
+*.keystore
+!app/debug.keystore
+release-key.properties
