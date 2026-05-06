@@ -16,6 +16,15 @@ service cloud.firestore {
       return isSignedIn() && request.auth.uid in chat.participants;
     }
 
+    // True iff the calling user's profile says their nickname is the official broadcaster's
+    // nickname. Used to gate writes on the "official developer channel" so only the user with
+    // the well-known nickname can post / update the channel doc.
+    function isOfficialBroadcaster() {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.nickname == "General_оф";
+    }
+
     // Users: anyone authenticated can read profiles (needed for nickname search);
     // only the owner can write their own profile.
     match /users/{uid} {
@@ -24,20 +33,64 @@ service cloud.firestore {
       allow delete: if isSelf(uid);
     }
 
-    // Chats: only participants can read/write.
+    // Nickname registry. The doc id is the lower-cased nickname; the doc stores the owning UID.
+    // A user can claim a free nickname or take back one already pointing at their own UID.
+    // No one else can write to a claim that points at a different UID.
+    match /nicknames/{nicknameLower} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && request.resource.data.uid == request.auth.uid;
+      allow update: if isSignedIn()
+        && resource.data.uid == request.auth.uid
+        && request.resource.data.uid == request.auth.uid;
+      allow delete: if isSignedIn() && resource.data.uid == request.auth.uid;
+    }
+
+    // Chats: regular chats are private to participants; "channel" chats are world-readable
+    // broadcasts with a single allowed broadcaster (gated by nickname).
     match /chats/{chatId} {
-      allow read: if isParticipant(resource.data);
-      allow create: if isSignedIn() && request.auth.uid in request.resource.data.participants;
-      allow update: if isParticipant(resource.data);
-      allow delete: if isParticipant(resource.data);
+      allow read: if isSignedIn() && (
+        resource.data.type == "channel" || isParticipant(resource.data)
+      );
+      allow create: if isSignedIn() && (
+        request.resource.data.type == "channel" ||
+        request.auth.uid in request.resource.data.participants
+      );
+      allow update: if isSignedIn() && (
+        isParticipant(resource.data) ||
+        (resource.data.type == "channel" && isOfficialBroadcaster())
+      );
+      // Channels are persistent and never deletable from a client.
+      allow delete: if isSignedIn()
+        && resource.data.type != "channel"
+        && isParticipant(resource.data);
 
       match /messages/{messageId} {
-        allow read: if isParticipant(get(/databases/$(database)/documents/chats/$(chatId)).data);
+        allow read: if isSignedIn() && (
+          get(/databases/$(database)/documents/chats/$(chatId)).data.type == "channel" ||
+          request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participants
+        );
         allow create: if isSignedIn()
           && request.resource.data.senderId == request.auth.uid
-          && request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participants;
-        allow update: if isSignedIn()
-          && request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participants;
+          && (
+            (
+              get(/databases/$(database)/documents/chats/$(chatId)).data.type == "channel"
+              && isOfficialBroadcaster()
+            ) ||
+            (
+              get(/databases/$(database)/documents/chats/$(chatId)).data.type != "channel"
+              && request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participants
+            )
+          );
+        allow update: if isSignedIn() && (
+          (
+            get(/databases/$(database)/documents/chats/$(chatId)).data.type == "channel"
+            && isOfficialBroadcaster()
+          ) ||
+          (
+            get(/databases/$(database)/documents/chats/$(chatId)).data.type != "channel"
+            && request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participants
+          )
+        );
         allow delete: if isSignedIn() && resource.data.senderId == request.auth.uid;
       }
     }

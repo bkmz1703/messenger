@@ -73,7 +73,10 @@ fun ChatsListScreen(
                         chat = chat,
                         currentUid = uid,
                         onClick = { onOpenChat(chat.id) },
-                        onLongClick = { pendingDelete = chat },
+                        onLongClick = {
+                            // Official channel is shared and never deletable from a client.
+                            if (chat.type != Chat.TYPE_CHANNEL) pendingDelete = chat
+                        },
                     )
                     HorizontalDivider(thickness = 0.5.dp)
                 }
@@ -124,16 +127,18 @@ private fun ChatRow(
     onLongClick: () -> Unit,
 ) {
     val otherUid = chat.participants.firstOrNull { it != currentUid }
-    val displayName = when {
-        chat.type == Chat.TYPE_GROUP -> chat.title.orEmpty().ifBlank { "Группа" }
+    val displayName = when (chat.type) {
+        Chat.TYPE_CHANNEL -> chat.title.orEmpty().ifBlank { "Канал" }
+        Chat.TYPE_GROUP -> chat.title.orEmpty().ifBlank { "Группа" }
         else -> otherUid?.let { chat.participantNicknames[it] }.orEmpty().ifBlank { "Без имени" }
     }
-    val color = when {
-        chat.type == Chat.TYPE_GROUP -> 0xFF455A64L
+    val color = when (chat.type) {
+        Chat.TYPE_CHANNEL -> 0xFF1976D2L
+        Chat.TYPE_GROUP -> 0xFF455A64L
         else -> otherUid?.let { chat.participantColors[it] } ?: 0xFF455A64L
     }
-    val photo = when {
-        chat.type == Chat.TYPE_GROUP -> chat.photoUrl
+    val photo = when (chat.type) {
+        Chat.TYPE_CHANNEL, Chat.TYPE_GROUP -> chat.photoUrl
         else -> otherUid?.let { chat.participantPhotoUrls[it] }
     }
     val unread = chat.unreadCounts[currentUid].orZero()

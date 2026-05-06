@@ -98,6 +98,8 @@ fun ChatScreen(
     val input by viewModel.input.collectAsStateWithLifecycle()
     val recording by viewModel.recording.collectAsStateWithLifecycle()
     val error by viewModel.error.collectAsStateWithLifecycle()
+    val readOnly by viewModel.readOnly.collectAsStateWithLifecycle()
+    val isChannel by viewModel.isChannel.collectAsStateWithLifecycle()
     val currentUid = viewModel.currentUid
 
     val listState = rememberLazyListState()
@@ -175,7 +177,7 @@ fun ChatScreen(
                     }
                 },
                 actions = {
-                    if (chat?.type != Chat.TYPE_GROUP) {
+                    if (chat?.type == Chat.TYPE_DIRECT) {
                         IconButton(onClick = {
                             scope.launch { viewModel.startCall(video = false)?.let { onStartCall(it, false) } }
                         }) { Icon(Icons.Default.Call, contentDescription = stringResource(R.string.call_audio)) }
@@ -183,7 +185,8 @@ fun ChatScreen(
                             scope.launch { viewModel.startCall(video = true)?.let { onStartCall(it, true) } }
                         }) { Icon(Icons.Default.Videocam, contentDescription = stringResource(R.string.call_video)) }
                     }
-                    Box {
+                    // Official channel is never editable / deletable from any client.
+                    if (!isChannel) Box {
                         IconButton(onClick = { menuOpen = true }) {
                             Icon(
                                 Icons.Default.MoreVert,
@@ -271,26 +274,43 @@ fun ChatScreen(
                 }
             }
 
-            ChatInput(
-                input = input,
-                recording = recording,
-                onInputChange = viewModel::setInput,
-                onSendText = viewModel::sendText,
-                onPickImage = { imagePicker.launch(androidx.activity.result.PickVisualMediaRequest()) },
-                onPickVideo = {
-                    videoPicker.launch(
-                        androidx.activity.result.PickVisualMediaRequest(
-                            ActivityResultContracts.PickVisualMedia.VideoOnly,
-                        )
+            if (readOnly) {
+                Surface(
+                    color = MaterialTheme.colorScheme.surfaceVariant,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(
+                        stringResource(R.string.channel_readonly_notice),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                     )
-                },
-                onPickFile = { filePicker.launch("*/*") },
-                onStartRecord = {
-                    if (recordPermission.status.isGranted) viewModel.startVoiceRecording()
-                    else recordPermission.launchPermissionRequest()
-                },
-                onStopRecord = { send -> viewModel.stopVoiceRecording(send) },
-            )
+                }
+            } else {
+                ChatInput(
+                    input = input,
+                    recording = recording,
+                    onInputChange = viewModel::setInput,
+                    onSendText = viewModel::sendText,
+                    onPickImage = { imagePicker.launch(androidx.activity.result.PickVisualMediaRequest()) },
+                    onPickVideo = {
+                        videoPicker.launch(
+                            androidx.activity.result.PickVisualMediaRequest(
+                                ActivityResultContracts.PickVisualMedia.VideoOnly,
+                            )
+                        )
+                    },
+                    onPickFile = { filePicker.launch("*/*") },
+                    onStartRecord = {
+                        if (recordPermission.status.isGranted) viewModel.startVoiceRecording()
+                        else recordPermission.launchPermissionRequest()
+                    },
+                    onStopRecord = { send -> viewModel.stopVoiceRecording(send) },
+                )
+            }
         }
 
         SnackbarHost(

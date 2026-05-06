@@ -28,15 +28,36 @@ class ChatRepository @Inject constructor(
     fun observeChats(uid: String): Flow<List<Chat>> = callbackFlow {
         // Sort client-side so the query needs no composite index and so freshly-created chats
         // (which still have a null lastMessageAt locally) remain visible.
-        val reg = firestore.collection("chats")
+        var personal: List<Chat> = emptyList()
+        var channels: List<Chat> = emptyList()
+
+        fun emit() {
+            // Channels (read-only broadcasts everyone sees) always pinned at the top.
+            val merged = channels.sortedByDescending { it.lastMessageAt ?: it.createdAt ?: Date(0) } +
+                personal.sortedByDescending { it.lastMessageAt ?: it.createdAt ?: Date(0) }
+            trySend(merged)
+        }
+
+        val regPersonal = firestore.collection("chats")
             .whereArrayContains("participants", uid)
             .addSnapshotListener { snap, _ ->
-                val list = snap?.documents.orEmpty().mapNotNull { d ->
+                personal = snap?.documents.orEmpty().mapNotNull { d ->
                     d.toObject(Chat::class.java)?.apply { id = d.id }
-                }.sortedByDescending { it.lastMessageAt ?: it.createdAt ?: Date(0) }
-                trySend(list)
+                }.filter { it.type != Chat.TYPE_CHANNEL }
+                emit()
             }
-        awaitClose { reg.remove() }
+        val regChannels = firestore.collection("chats")
+            .whereEqualTo("type", Chat.TYPE_CHANNEL)
+            .addSnapshotListener { snap, _ ->
+                channels = snap?.documents.orEmpty().mapNotNull { d ->
+                    d.toObject(Chat::class.java)?.apply { id = d.id }
+                }
+                emit()
+            }
+        awaitClose {
+            regPersonal.remove()
+            regChannels.remove()
+        }
     }
 
     fun observeChat(chatId: String): Flow<Chat?> = callbackFlow {

@@ -72,6 +72,10 @@
     <string name="chat_delete_message">Удалятся все сообщения. Это действие нельзя отменить.</string>
     <string name="chat_title_hint">Название</string>
 
+    <!-- Channel -->
+    <string name="channel_readonly_notice">Только администратор канала может публиковать сообщения здесь.</string>
+    <string name="error_nickname_taken">Этот ник уже занят</string>
+
     <!-- Notification -->
     <string name="channel_messages_name">Сообщения</string>
     <string name="channel_messages_desc">Уведомления о новых сообщениях</string>

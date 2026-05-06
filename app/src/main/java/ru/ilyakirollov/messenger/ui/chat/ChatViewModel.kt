@@ -65,6 +65,18 @@ class ChatViewModel @Inject constructor(
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
+    /** True for one-way broadcast chats (channels) where the current user is not a broadcaster. */
+    val readOnly: StateFlow<Boolean> = chat
+        .map { c ->
+            val uid = currentUid
+            c?.type == Chat.TYPE_CHANNEL && (uid == null || uid !in c.broadcasterUids)
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
+
+    val isChannel: StateFlow<Boolean> = chat
+        .map { it?.type == Chat.TYPE_CHANNEL }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
+
     init {
         viewModelScope.launch {
             messages.collect { list ->

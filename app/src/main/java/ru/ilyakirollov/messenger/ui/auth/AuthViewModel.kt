@@ -45,6 +45,18 @@ class AuthViewModel @Inject constructor(
         }
     }.stateIn(viewModelScope, SharingStarted.Eagerly, AuthState.Loading)
 
+    init {
+        // Best-effort reconcile for users who upgraded from a previous build that didn't claim
+        // nicknames or auto-create the official channel.
+        viewModelScope.launch {
+            state.collect { s ->
+                if (s is AuthState.Authenticated) {
+                    runCatching { authRepository.reconcileBoot(s.nickname) }
+                }
+            }
+        }
+    }
+
     fun signIn(nickname: String) {
         if (_busy.value) return
         _busy.value = true

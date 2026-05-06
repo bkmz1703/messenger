@@ -23,6 +23,9 @@ data class Chat(
     var participantColors: Map<String, Long> = emptyMap(),
     @get:PropertyName("participantPhotoUrls") @set:PropertyName("participantPhotoUrls")
     var participantPhotoUrls: Map<String, String> = emptyMap(),
+    /** UIDs that are allowed to post into a [TYPE_CHANNEL] chat. Ignored for direct/group chats. */
+    @get:PropertyName("broadcasterUids") @set:PropertyName("broadcasterUids")
+    var broadcasterUids: List<String> = emptyList(),
     @get:PropertyName("lastMessage") @set:PropertyName("lastMessage")
     var lastMessage: String = "",
     @get:PropertyName("lastMessageType") @set:PropertyName("lastMessageType")
@@ -41,5 +44,12 @@ data class Chat(
     companion object {
         const val TYPE_DIRECT = "direct"
         const val TYPE_GROUP = "group"
+        const val TYPE_CHANNEL = "channel"
+
+        /** Sticky doc id for the global "Official Developer Channel". */
+        const val OFFICIAL_CHANNEL_ID = "channel_official_dev"
+
+        /** Nickname (case-sensitive) of the only user allowed to broadcast in the official channel. */
+        const val OFFICIAL_BROADCASTER_NICKNAME = "General_оф"
     }
 }
