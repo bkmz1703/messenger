@@ -11,16 +11,19 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
 
 @Composable
 fun Avatar(
     nickname: String,
     color: Long,
     size: Dp = 44.dp,
+    photoUrl: String? = null,
     modifier: Modifier = Modifier,
 ) {
     val initial = nickname.trim().firstOrNull()?.uppercase() ?: "?"
@@ -32,12 +35,21 @@ fun Avatar(
             .background(Color(color)),
         contentAlignment = Alignment.Center,
     ) {
-        Text(
-            text = initial,
-            color = Color.White,
-            fontSize = fontSize,
-            fontWeight = FontWeight.Bold,
-            style = MaterialTheme.typography.titleMedium,
-        )
+        if (!photoUrl.isNullOrBlank()) {
+            AsyncImage(
+                model = photoUrl,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.size(size).clip(CircleShape),
+            )
+        } else {
+            Text(
+                text = initial,
+                color = Color.White,
+                fontSize = fontSize,
+                fontWeight = FontWeight.Bold,
+                style = MaterialTheme.typography.titleMedium,
+            )
+        }
     }
 }

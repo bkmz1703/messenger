@@ -68,6 +68,10 @@ class ChatRepository @Inject constructor(
         val ref = firestore.collection("chats").document(chatId)
         val snap = ref.get().await()
         if (!snap.exists()) {
+            val photoUrls = buildMap {
+                if (!currentUser.photoUrl.isNullOrBlank()) put(currentUser.uid, currentUser.photoUrl!!)
+                if (!other.photoUrl.isNullOrBlank()) put(other.uid, other.photoUrl!!)
+            }
             val chat = Chat(
                 id = chatId,
                 type = Chat.TYPE_DIRECT,
@@ -80,6 +84,7 @@ class ChatRepository @Inject constructor(
                     currentUser.uid to currentUser.avatarColor,
                     other.uid to other.avatarColor,
                 ),
+                participantPhotoUrls = photoUrls,
                 unreadCounts = mapOf(currentUser.uid to 0L, other.uid to 0L),
             )
             ref.set(chat).await()
@@ -99,10 +104,41 @@ class ChatRepository @Inject constructor(
             participants = all.map { it.uid },
             participantNicknames = all.associate { it.uid to it.nickname },
             participantColors = all.associate { it.uid to it.avatarColor },
+            participantPhotoUrls = all.filter { !it.photoUrl.isNullOrBlank() }
+                .associate { it.uid to it.photoUrl!! },
             unreadCounts = all.associate { it.uid to 0L },
         )
         ref.set(chat).await()
         return ref.id
+    }
+
+    suspend fun updateChatTitle(chatId: String, title: String) {
+        val sanitized = title.trim()
+        require(sanitized.isNotBlank()) { "Название не может быть пустым" }
+        firestore.collection("chats").document(chatId).set(
+            mapOf("title" to sanitized),
+            SetOptions.merge(),
+        ).await()
+    }
+
+    suspend fun updateChatPhoto(chatId: String, uri: android.net.Uri): String {
+        val result = uploader.upload(
+            uri,
+            ru.ilyakirollov.messenger.data.upload.CloudinaryResourceType.IMAGE,
+            "chat_${chatId}",
+        )
+        firestore.collection("chats").document(chatId).set(
+            mapOf("photoUrl" to result.secureUrl),
+            SetOptions.merge(),
+        ).await()
+        return result.secureUrl
+    }
+
+    suspend fun clearChatPhoto(chatId: String) {
+        firestore.collection("chats").document(chatId).set(
+            mapOf("photoUrl" to null),
+            SetOptions.merge(),
+        ).await()
     }
 
     suspend fun sendText(chatId: String, sender: User, text: String) {

@@ -1,5 +1,9 @@
 package ru.ilyakirollov.messenger.ui.profile
 
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -21,16 +25,22 @@ import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ColorLens
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Snackbar
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -54,43 +64,101 @@ fun ProfileScreen(
 ) {
     val nickname by viewModel.nickname.collectAsStateWithLifecycle()
     val color by viewModel.avatarColor.collectAsStateWithLifecycle()
+    val photoUrl by viewModel.photoUrl.collectAsStateWithLifecycle()
+    val busy by viewModel.busy.collectAsStateWithLifecycle()
+    val error by viewModel.error.collectAsStateWithLifecycle()
     var editingNick by remember { mutableStateOf(false) }
     var editingColor by remember { mutableStateOf(false) }
     var draftNick by remember(nickname) { mutableStateOf(nickname.orEmpty()) }
     val activeColor = color ?: 0xFF455A64
 
-    Column(
-        modifier = Modifier.fillMaxSize().padding(24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(16.dp),
-    ) {
-        Spacer(Modifier.size(16.dp))
-        Avatar(nickname = nickname.orEmpty(), color = activeColor, size = 120.dp)
-        Text(
-            nickname.orEmpty().ifBlank { "—" },
-            style = MaterialTheme.typography.headlineSmall,
-            fontWeight = FontWeight.Bold,
-        )
-        OutlinedButton(onClick = { editingNick = true }, modifier = Modifier.fillMaxWidth()) {
-            Icon(Icons.Default.Edit, contentDescription = null)
-            Spacer(Modifier.size(8.dp))
-            Text(stringResource(R.string.profile_change_nickname))
+    val photoPicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia(),
+    ) { uri: Uri? ->
+        uri?.let(viewModel::updateAvatarPhoto)
+    }
+
+    val snackbar = remember { SnackbarHostState() }
+    LaunchedEffect(error) {
+        val msg = error
+        if (!msg.isNullOrBlank()) {
+            snackbar.showSnackbar(msg)
+            viewModel.clearError()
         }
-        OutlinedButton(onClick = { editingColor = true }, modifier = Modifier.fillMaxWidth()) {
-            Icon(Icons.Default.ColorLens, contentDescription = null)
-            Spacer(Modifier.size(8.dp))
-            Text(stringResource(R.string.profile_change_avatar))
-        }
-        Spacer(Modifier.size(8.dp))
-        Button(
-            onClick = onSignOut,
-            modifier = Modifier.fillMaxWidth(),
-            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.tertiary),
+    }
+
+    Box(modifier = Modifier.fillMaxSize()) {
+        Column(
+            modifier = Modifier.fillMaxSize().padding(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = null)
+            Spacer(Modifier.size(16.dp))
+            Box(contentAlignment = Alignment.BottomEnd) {
+                Avatar(
+                    nickname = nickname.orEmpty(),
+                    color = activeColor,
+                    size = 120.dp,
+                    photoUrl = photoUrl,
+                )
+                if (busy) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(48.dp),
+                        strokeWidth = 4.dp,
+                    )
+                }
+            }
+            Text(
+                nickname.orEmpty().ifBlank { "—" },
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold,
+            )
+            OutlinedButton(onClick = { editingNick = true }, modifier = Modifier.fillMaxWidth()) {
+                Icon(Icons.Default.Edit, contentDescription = null)
+                Spacer(Modifier.size(8.dp))
+                Text(stringResource(R.string.profile_change_nickname))
+            }
+            OutlinedButton(
+                onClick = {
+                    photoPicker.launch(
+                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
+                    )
+                },
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Icon(Icons.Default.PhotoCamera, contentDescription = null)
+                Spacer(Modifier.size(8.dp))
+                Text(stringResource(R.string.profile_change_photo))
+            }
+            OutlinedButton(onClick = { editingColor = true }, modifier = Modifier.fillMaxWidth()) {
+                Icon(Icons.Default.ColorLens, contentDescription = null)
+                Spacer(Modifier.size(8.dp))
+                Text(stringResource(R.string.profile_change_avatar))
+            }
+            if (!photoUrl.isNullOrBlank()) {
+                TextButton(
+                    onClick = { viewModel.clearAvatarPhoto() },
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(stringResource(R.string.profile_clear_photo))
+                }
+            }
             Spacer(Modifier.size(8.dp))
-            Text(stringResource(R.string.profile_logout))
+            Button(
+                onClick = onSignOut,
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.tertiary),
+            ) {
+                Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = null)
+                Spacer(Modifier.size(8.dp))
+                Text(stringResource(R.string.profile_logout))
+            }
         }
+
+        SnackbarHost(
+            hostState = snackbar,
+            modifier = Modifier.align(Alignment.BottomCenter),
+        ) { data -> Snackbar(snackbarData = data) }
     }
 
     if (editingNick) {
@@ -127,7 +195,12 @@ fun ProfileScreen(
             title = { Text(stringResource(R.string.profile_change_avatar)) },
             text = {
                 Column {
-                    Avatar(nickname = nickname.orEmpty(), color = activeColor, size = 96.dp)
+                    Avatar(
+                        nickname = nickname.orEmpty(),
+                        color = activeColor,
+                        size = 96.dp,
+                        photoUrl = photoUrl,
+                    )
                     Spacer(Modifier.size(16.dp))
                     LazyVerticalGrid(
                         columns = GridCells.Fixed(5),

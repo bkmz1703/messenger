@@ -19,9 +19,11 @@ class UserPreferences @Inject constructor(
 ) {
     private val keyNickname = stringPreferencesKey("nickname")
     private val keyAvatarColor = longPreferencesKey("avatar_color")
+    private val keyPhotoUrl = stringPreferencesKey("photo_url")
 
     val nickname: Flow<String?> = context.dataStore.data.map { it[keyNickname] }
     val avatarColor: Flow<Long?> = context.dataStore.data.map { it[keyAvatarColor] }
+    val photoUrl: Flow<String?> = context.dataStore.data.map { it[keyPhotoUrl] }
 
     suspend fun setNickname(nickname: String) {
         context.dataStore.edit { it[keyNickname] = nickname }
@@ -29,6 +31,12 @@ class UserPreferences @Inject constructor(
 
     suspend fun setAvatarColor(color: Long) {
         context.dataStore.edit { it[keyAvatarColor] = color }
+    }
+
+    suspend fun setPhotoUrl(url: String?) {
+        context.dataStore.edit { prefs ->
+            if (url.isNullOrBlank()) prefs.remove(keyPhotoUrl) else prefs[keyPhotoUrl] = url
+        }
     }
 
     suspend fun clear() {

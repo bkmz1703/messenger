@@ -20,9 +20,15 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Snackbar
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -30,6 +36,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.launch
 import ru.ilyakirollov.messenger.R
 import ru.ilyakirollov.messenger.data.model.CallSession
 import ru.ilyakirollov.messenger.ui.components.Avatar
@@ -41,23 +48,53 @@ fun CallsHistoryScreen(
     viewModel: CallsHistoryViewModel = hiltViewModel(),
 ) {
     val list by viewModel.history.collectAsStateWithLifecycle()
+    val error by viewModel.error.collectAsStateWithLifecycle()
     val uid = viewModel.currentUid
+    val scope = rememberCoroutineScope()
+    val snackbar = remember { SnackbarHostState() }
 
-    if (list.isEmpty()) {
-        Box(modifier = Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
-            Text(
-                stringResource(R.string.calls_empty),
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+    LaunchedEffect(error) {
+        val msg = error
+        if (!msg.isNullOrBlank()) {
+            snackbar.showSnackbar(msg)
+            viewModel.clearError()
         }
-        return
     }
 
-    LazyColumn(modifier = Modifier.fillMaxSize()) {
-        items(list, key = { it.id }) { call ->
-            CallRow(call = call, currentUid = uid, onAudioCall = { onCall(it, false) })
-            HorizontalDivider(thickness = 0.5.dp)
+    Box(modifier = Modifier.fillMaxSize()) {
+        if (list.isEmpty()) {
+            Box(
+                modifier = Modifier.fillMaxSize().padding(24.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    stringResource(R.string.calls_empty),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        } else {
+            LazyColumn(modifier = Modifier.fillMaxSize()) {
+                items(list, key = { it.id }) { call ->
+                    CallRow(
+                        call = call,
+                        currentUid = uid,
+                        onRedial = { video ->
+                            scope.launch {
+                                viewModel.redial(call, video = video)?.let { newId ->
+                                    onCall(newId, video)
+                                }
+                            }
+                        },
+                    )
+                    HorizontalDivider(thickness = 0.5.dp)
+                }
+            }
         }
+
+        SnackbarHost(
+            hostState = snackbar,
+            modifier = Modifier.align(Alignment.BottomCenter),
+        ) { data -> Snackbar(snackbarData = data) }
     }
 }
 
@@ -65,14 +102,14 @@ fun CallsHistoryScreen(
 private fun CallRow(
     call: CallSession,
     currentUid: String?,
-    onAudioCall: (callId: String) -> Unit,
+    onRedial: (video: Boolean) -> Unit,
 ) {
     val outgoing = call.callerId == currentUid
     val nick = if (outgoing) call.calleeNickname else call.callerNickname
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable { onAudioCall(call.id) }
+            .clickable { onRedial(call.video) }
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -96,10 +133,17 @@ private fun CallRow(
                 )
             }
         }
-        IconButton(onClick = { onAudioCall(call.id) }) {
+        IconButton(onClick = { onRedial(false) }) {
             Icon(
-                if (call.video) Icons.Default.Videocam else Icons.Default.Call,
-                contentDescription = null,
+                Icons.Default.Call,
+                contentDescription = stringResource(R.string.call_audio),
+                tint = MaterialTheme.colorScheme.primary,
+            )
+        }
+        IconButton(onClick = { onRedial(true) }) {
+            Icon(
+                Icons.Default.Videocam,
+                contentDescription = stringResource(R.string.call_video),
                 tint = MaterialTheme.colorScheme.primary,
             )
         }

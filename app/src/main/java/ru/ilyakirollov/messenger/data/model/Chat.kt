@@ -13,12 +13,16 @@ data class Chat(
     var type: String = TYPE_DIRECT,
     @get:PropertyName("title") @set:PropertyName("title")
     var title: String? = null,
+    @get:PropertyName("photoUrl") @set:PropertyName("photoUrl")
+    var photoUrl: String? = null,
     @get:PropertyName("participants") @set:PropertyName("participants")
     var participants: List<String> = emptyList(),
     @get:PropertyName("participantNicknames") @set:PropertyName("participantNicknames")
     var participantNicknames: Map<String, String> = emptyMap(),
     @get:PropertyName("participantColors") @set:PropertyName("participantColors")
     var participantColors: Map<String, Long> = emptyMap(),
+    @get:PropertyName("participantPhotoUrls") @set:PropertyName("participantPhotoUrls")
+    var participantPhotoUrls: Map<String, String> = emptyMap(),
     @get:PropertyName("lastMessage") @set:PropertyName("lastMessage")
     var lastMessage: String = "",
     @get:PropertyName("lastMessageType") @set:PropertyName("lastMessageType")

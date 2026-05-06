@@ -1,5 +1,6 @@
 package ru.ilyakirollov.messenger.data.repository
 
+import android.net.Uri
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.SetOptions
@@ -12,12 +13,15 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.tasks.await
 import ru.ilyakirollov.messenger.data.model.User
+import ru.ilyakirollov.messenger.data.upload.CloudinaryResourceType
+import ru.ilyakirollov.messenger.data.upload.CloudinaryUploader
 
 @Singleton
 class AuthRepository @Inject constructor(
     private val auth: FirebaseAuth,
     private val firestore: FirebaseFirestore,
     private val messaging: FirebaseMessaging,
+    private val uploader: CloudinaryUploader,
 ) {
     val currentUid: String? get() = auth.currentUser?.uid
 
@@ -52,7 +56,7 @@ class AuthRepository @Inject constructor(
             online = true,
         )
         firestore.collection("users").document(uid).set(user, SetOptions.merge()).await()
-        propagateUserToChats(uid, sanitized, color)
+        propagateUserToChats(uid, sanitized, color, photoUrl = null)
         return user
     }
 
@@ -67,7 +71,7 @@ class AuthRepository @Inject constructor(
             ),
             SetOptions.merge(),
         ).await()
-        propagateUserToChats(uid, nickname = sanitized, color = null)
+        propagateUserToChats(uid, nickname = sanitized, color = null, photoUrl = null)
     }
 
     suspend fun updateAvatarColor(color: Long) {
@@ -76,7 +80,29 @@ class AuthRepository @Inject constructor(
             mapOf("avatarColor" to color),
             SetOptions.merge(),
         ).await()
-        propagateUserToChats(uid, nickname = null, color = color)
+        propagateUserToChats(uid, nickname = null, color = color, photoUrl = null)
+    }
+
+    /** Upload an image from the user's gallery to Cloudinary and use it as the avatar photo. */
+    suspend fun updateAvatarPhoto(uri: Uri): String {
+        val uid = currentUid ?: error("Не авторизован")
+        val result = uploader.upload(uri, CloudinaryResourceType.IMAGE, "avatar_$uid")
+        firestore.collection("users").document(uid).set(
+            mapOf("photoUrl" to result.secureUrl),
+            SetOptions.merge(),
+        ).await()
+        propagateUserToChats(uid, nickname = null, color = null, photoUrl = result.secureUrl)
+        return result.secureUrl
+    }
+
+    /** Remove avatar photo, falling back to the color avatar. */
+    suspend fun clearAvatarPhoto() {
+        val uid = currentUid ?: return
+        firestore.collection("users").document(uid).set(
+            mapOf("photoUrl" to null),
+            SetOptions.merge(),
+        ).await()
+        propagateUserToChats(uid, nickname = null, color = null, photoUrl = "")
     }
 
     suspend fun updatePresence(online: Boolean) {
@@ -113,8 +139,18 @@ class AuthRepository @Inject constructor(
         auth.signOut()
     }
 
-    private suspend fun propagateUserToChats(uid: String, nickname: String?, color: Long?) {
-        if (nickname == null && color == null) return
+    /**
+     * Update denormalized participant info on every chat the user belongs to. Pass non-null
+     * values for the fields that changed; pass an empty string in [photoUrl] to clear the
+     * photo (set to null in Firestore).
+     */
+    private suspend fun propagateUserToChats(
+        uid: String,
+        nickname: String?,
+        color: Long?,
+        photoUrl: String?,
+    ) {
+        if (nickname == null && color == null && photoUrl == null) return
         val chats = runCatching {
             firestore.collection("chats")
                 .whereArrayContains("participants", uid)
@@ -123,9 +159,14 @@ class AuthRepository @Inject constructor(
         }.getOrNull() ?: return
 
         if (chats.isEmpty) return
-        val updates = mutableMapOf<String, Any>()
+        val updates = mutableMapOf<String, Any?>()
         if (nickname != null) updates["participantNicknames.$uid"] = nickname
         if (color != null) updates["participantColors.$uid"] = color
+        if (photoUrl != null) {
+            // Empty string means "remove the photo"; otherwise store the URL.
+            updates["participantPhotoUrls.$uid"] =
+                if (photoUrl.isBlank()) com.google.firebase.firestore.FieldValue.delete() else photoUrl
+        }
 
         firestore.runBatch { batch ->
             chats.documents.forEach { doc ->

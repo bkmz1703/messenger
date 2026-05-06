@@ -1,6 +1,7 @@
 package ru.ilyakirollov.messenger.ui.chats
 
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -16,6 +17,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Chat
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Badge
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
@@ -23,8 +25,12 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -47,6 +53,7 @@ fun ChatsListScreen(
 ) {
     val chats by viewModel.chats.collectAsStateWithLifecycle()
     val uid = viewModel.currentUid
+    var pendingDelete by remember { mutableStateOf<Chat?>(null) }
 
     Box(modifier = Modifier.fillMaxSize()) {
         if (chats.isEmpty()) {
@@ -62,7 +69,12 @@ fun ChatsListScreen(
         } else {
             LazyColumn(modifier = Modifier.fillMaxSize()) {
                 items(chats, key = { it.id }) { chat ->
-                    ChatRow(chat = chat, currentUid = uid, onClick = { onOpenChat(chat.id) })
+                    ChatRow(
+                        chat = chat,
+                        currentUid = uid,
+                        onClick = { onOpenChat(chat.id) },
+                        onLongClick = { pendingDelete = chat },
+                    )
                     HorizontalDivider(thickness = 0.5.dp)
                 }
             }
@@ -79,22 +91,50 @@ fun ChatsListScreen(
             Icon(Icons.AutoMirrored.Filled.Chat, contentDescription = stringResource(R.string.new_chat))
         }
     }
+
+    val toDelete = pendingDelete
+    if (toDelete != null) {
+        AlertDialog(
+            onDismissRequest = { pendingDelete = null },
+            title = { Text(stringResource(R.string.chat_delete_title)) },
+            text = { Text(stringResource(R.string.chat_delete_message)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    viewModel.deleteChat(toDelete.id)
+                    pendingDelete = null
+                }) {
+                    Text(stringResource(R.string.delete))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingDelete = null }) {
+                    Text(stringResource(R.string.cancel))
+                }
+            },
+        )
+    }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun ChatRow(chat: Chat, currentUid: String?, onClick: () -> Unit) {
+private fun ChatRow(
+    chat: Chat,
+    currentUid: String?,
+    onClick: () -> Unit,
+    onLongClick: () -> Unit,
+) {
+    val otherUid = chat.participants.firstOrNull { it != currentUid }
     val displayName = when {
         chat.type == Chat.TYPE_GROUP -> chat.title.orEmpty().ifBlank { "Группа" }
-        else -> chat.participants.firstOrNull { it != currentUid }
-            ?.let { chat.participantNicknames[it] }
-            .orEmpty()
-            .ifBlank { "Без имени" }
+        else -> otherUid?.let { chat.participantNicknames[it] }.orEmpty().ifBlank { "Без имени" }
     }
     val color = when {
         chat.type == Chat.TYPE_GROUP -> 0xFF455A64L
-        else -> chat.participants.firstOrNull { it != currentUid }
-            ?.let { chat.participantColors[it] }
-            ?: 0xFF455A64L
+        else -> otherUid?.let { chat.participantColors[it] } ?: 0xFF455A64L
+    }
+    val photo = when {
+        chat.type == Chat.TYPE_GROUP -> chat.photoUrl
+        else -> otherUid?.let { chat.participantPhotoUrls[it] }
     }
     val unread = chat.unreadCounts[currentUid].orZero()
 
@@ -102,13 +142,13 @@ private fun ChatRow(chat: Chat, currentUid: String?, onClick: () -> Unit) {
         color = MaterialTheme.colorScheme.surface,
         modifier = Modifier
             .fillMaxWidth()
-            .clickable { onClick() },
+            .combinedClickable(onClick = onClick, onLongClick = onLongClick),
     ) {
         Row(
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Avatar(nickname = displayName, color = color, size = 48.dp)
+            Avatar(nickname = displayName, color = color, size = 48.dp, photoUrl = photo)
             Spacer(Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(

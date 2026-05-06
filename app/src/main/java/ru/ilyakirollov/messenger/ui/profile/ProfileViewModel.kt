@@ -1,5 +1,6 @@
 package ru.ilyakirollov.messenger.ui.profile
 
+import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -25,10 +26,16 @@ class ProfileViewModel @Inject constructor(
     val avatarColor: StateFlow<Long?> = preferences.avatarColor
         .stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
+    val photoUrl: StateFlow<String?> = preferences.photoUrl
+        .stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
     val palette: List<Long> = authRepository.avatarColors()
 
     private val _busy = MutableStateFlow(false)
     val busy: StateFlow<Boolean> = _busy.asStateFlow()
+
+    private val _error = MutableStateFlow<String?>(null)
+    val error: StateFlow<String?> = _error.asStateFlow()
 
     fun updateNickname(value: String) {
         viewModelScope.launch {
@@ -36,8 +43,8 @@ class ProfileViewModel @Inject constructor(
             try {
                 authRepository.updateNickname(value)
                 preferences.setNickname(value.trim())
-            } catch (_: Throwable) {
-                // ignore for MVP
+            } catch (t: Throwable) {
+                _error.value = t.localizedMessage
             } finally {
                 _busy.value = false
             }
@@ -50,11 +57,43 @@ class ProfileViewModel @Inject constructor(
             try {
                 authRepository.updateAvatarColor(color)
                 preferences.setAvatarColor(color)
-            } catch (_: Throwable) {
-                // ignore for MVP
+            } catch (t: Throwable) {
+                _error.value = t.localizedMessage
             } finally {
                 _busy.value = false
             }
         }
+    }
+
+    fun updateAvatarPhoto(uri: Uri) {
+        viewModelScope.launch {
+            _busy.value = true
+            try {
+                val url = authRepository.updateAvatarPhoto(uri)
+                preferences.setPhotoUrl(url)
+            } catch (t: Throwable) {
+                _error.value = t.localizedMessage ?: "Не удалось загрузить фото"
+            } finally {
+                _busy.value = false
+            }
+        }
+    }
+
+    fun clearAvatarPhoto() {
+        viewModelScope.launch {
+            _busy.value = true
+            try {
+                authRepository.clearAvatarPhoto()
+                preferences.setPhotoUrl(null)
+            } catch (t: Throwable) {
+                _error.value = t.localizedMessage
+            } finally {
+                _busy.value = false
+            }
+        }
+    }
+
+    fun clearError() {
+        _error.value = null
     }
 }

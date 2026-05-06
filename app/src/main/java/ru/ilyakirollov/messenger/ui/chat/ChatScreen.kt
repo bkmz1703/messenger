@@ -28,19 +28,30 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.AttachFile
 import androidx.compose.material.icons.filled.Call
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.Videocam
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Snackbar
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -92,6 +103,12 @@ fun ChatScreen(
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
+    val snackbar = remember { SnackbarHostState() }
+
+    var menuOpen by remember { mutableStateOf(false) }
+    var renameOpen by remember { mutableStateOf(false) }
+    var deleteOpen by remember { mutableStateOf(false) }
+    var draftTitle by remember(chat?.title) { mutableStateOf(chat?.title.orEmpty()) }
 
     val recordPermission = rememberPermissionState(Manifest.permission.RECORD_AUDIO)
     val imagePicker = rememberLauncherForActivityResult(
@@ -107,6 +124,17 @@ fun ChatScreen(
         val (name, size) = queryFileMeta(context, uri)
         viewModel.sendFile(uri, name, size)
     }
+    val chatPhotoPicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia(),
+    ) { uri: Uri? -> uri?.let(viewModel::changeChatPhoto) }
+
+    LaunchedEffect(error) {
+        val msg = error
+        if (!msg.isNullOrBlank()) {
+            snackbar.showSnackbar(msg)
+            viewModel.clearError()
+        }
+    }
 
     LaunchedEffect(messages.size) {
         if (messages.isNotEmpty()) listState.animateScrollToItem(messages.size - 1)
@@ -117,20 +145,22 @@ fun ChatScreen(
             TopAppBar(
                 title = {
                     val uid = currentUid
+                    val isGroup = chat?.type == Chat.TYPE_GROUP
+                    val otherUid = chat?.participants?.firstOrNull { it != uid }
                     val title = when {
-                        chat?.type == Chat.TYPE_GROUP -> chat?.title.orEmpty()
-                        else -> chat?.participants?.firstOrNull { it != uid }
-                            ?.let { chat?.participantNicknames?.get(it) }
-                            .orEmpty()
+                        isGroup -> chat?.title.orEmpty()
+                        else -> otherUid?.let { chat?.participantNicknames?.get(it) }.orEmpty()
                     }
                     val color = when {
-                        chat?.type == Chat.TYPE_GROUP -> 0xFF455A64L
-                        else -> chat?.participants?.firstOrNull { it != uid }
-                            ?.let { chat?.participantColors?.get(it) }
-                            ?: 0xFF455A64L
+                        isGroup -> 0xFF455A64L
+                        else -> otherUid?.let { chat?.participantColors?.get(it) } ?: 0xFF455A64L
+                    }
+                    val photo = when {
+                        isGroup -> chat?.photoUrl
+                        else -> otherUid?.let { chat?.participantPhotoUrls?.get(it) }
                     }
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Avatar(nickname = title, color = color, size = 36.dp)
+                        Avatar(nickname = title, color = color, size = 36.dp, photoUrl = photo)
                         Spacer(Modifier.width(8.dp))
                         Text(
                             title.ifBlank { "Чат" },
@@ -148,10 +178,69 @@ fun ChatScreen(
                     if (chat?.type != Chat.TYPE_GROUP) {
                         IconButton(onClick = {
                             scope.launch { viewModel.startCall(video = false)?.let { onStartCall(it, false) } }
-                        }) { Icon(Icons.Default.Call, contentDescription = null) }
+                        }) { Icon(Icons.Default.Call, contentDescription = stringResource(R.string.call_audio)) }
                         IconButton(onClick = {
                             scope.launch { viewModel.startCall(video = true)?.let { onStartCall(it, true) } }
-                        }) { Icon(Icons.Default.Videocam, contentDescription = null) }
+                        }) { Icon(Icons.Default.Videocam, contentDescription = stringResource(R.string.call_video)) }
+                    }
+                    Box {
+                        IconButton(onClick = { menuOpen = true }) {
+                            Icon(
+                                Icons.Default.MoreVert,
+                                contentDescription = stringResource(R.string.chat_actions),
+                            )
+                        }
+                        DropdownMenu(
+                            expanded = menuOpen,
+                            onDismissRequest = { menuOpen = false },
+                        ) {
+                            if (chat?.type == Chat.TYPE_GROUP) {
+                                DropdownMenuItem(
+                                    text = { Text(stringResource(R.string.chat_change_title)) },
+                                    leadingIcon = { Icon(Icons.Default.Edit, contentDescription = null) },
+                                    onClick = {
+                                        draftTitle = chat?.title.orEmpty()
+                                        menuOpen = false
+                                        renameOpen = true
+                                    },
+                                )
+                                DropdownMenuItem(
+                                    text = { Text(stringResource(R.string.chat_change_photo)) },
+                                    leadingIcon = { Icon(Icons.Default.PhotoCamera, contentDescription = null) },
+                                    onClick = {
+                                        menuOpen = false
+                                        chatPhotoPicker.launch(
+                                            androidx.activity.result.PickVisualMediaRequest(
+                                                ActivityResultContracts.PickVisualMedia.ImageOnly,
+                                            ),
+                                        )
+                                    },
+                                )
+                                if (!chat?.photoUrl.isNullOrBlank()) {
+                                    DropdownMenuItem(
+                                        text = { Text(stringResource(R.string.chat_clear_photo)) },
+                                        onClick = {
+                                            menuOpen = false
+                                            viewModel.clearChatPhoto()
+                                        },
+                                    )
+                                }
+                            }
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.chat_delete)) },
+                                leadingIcon = {
+                                    Icon(
+                                        Icons.Default.Delete,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.error,
+                                    )
+                                },
+                                onClick = {
+                                    menuOpen = false
+                                    deleteOpen = true
+                                },
+                            )
+                        }
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -182,16 +271,6 @@ fun ChatScreen(
                 }
             }
 
-            if (!error.isNullOrBlank()) {
-                Surface(color = MaterialTheme.colorScheme.errorContainer) {
-                    Text(
-                        error.orEmpty(),
-                        modifier = Modifier.padding(8.dp),
-                        color = MaterialTheme.colorScheme.onErrorContainer,
-                    )
-                }
-            }
-
             ChatInput(
                 input = input,
                 recording = recording,
@@ -213,6 +292,63 @@ fun ChatScreen(
                 onStopRecord = { send -> viewModel.stopVoiceRecording(send) },
             )
         }
+
+        SnackbarHost(
+            hostState = snackbar,
+            modifier = Modifier.fillMaxWidth(),
+        ) { data -> Snackbar(snackbarData = data) }
+    }
+
+    if (renameOpen) {
+        AlertDialog(
+            onDismissRequest = { renameOpen = false },
+            title = { Text(stringResource(R.string.chat_change_title)) },
+            text = {
+                OutlinedTextField(
+                    value = draftTitle,
+                    onValueChange = { if (it.length <= 60) draftTitle = it },
+                    singleLine = true,
+                    label = { Text(stringResource(R.string.chat_title_hint)) },
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        viewModel.renameChat(draftTitle)
+                        renameOpen = false
+                    },
+                    enabled = draftTitle.trim().isNotEmpty(),
+                ) { Text(stringResource(R.string.save)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { renameOpen = false }) {
+                    Text(stringResource(R.string.cancel))
+                }
+            },
+        )
+    }
+
+    if (deleteOpen) {
+        AlertDialog(
+            onDismissRequest = { deleteOpen = false },
+            title = { Text(stringResource(R.string.chat_delete_title)) },
+            text = { Text(stringResource(R.string.chat_delete_message)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    deleteOpen = false
+                    scope.launch {
+                        if (viewModel.deleteChatAndExit()) onBack()
+                    }
+                }) {
+                    Text(stringResource(R.string.delete))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { deleteOpen = false }) {
+                    Text(stringResource(R.string.cancel))
+                }
+            },
+        )
     }
 }
 

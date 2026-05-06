@@ -11,8 +11,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.flatMapLatest
-import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -79,6 +77,8 @@ class ChatViewModel @Inject constructor(
     }
 
     fun setInput(value: String) { _input.value = value }
+
+    fun clearError() { _error.value = null }
 
     fun sendText() {
         val text = _input.value
@@ -181,9 +181,64 @@ class ChatViewModel @Inject constructor(
 
     suspend fun startCall(video: Boolean): String? {
         val uid = currentUid ?: return null
-        val other = otherUser.value ?: return null
         val me = userRepository.getUser(uid) ?: return null
-        return runCatching { callRepository.startCall(me, other, video) }.getOrNull()
+        // Read participant info directly from the chat doc so we can place the call even if
+        // [otherUser] hasn't finished loading yet.
+        val current = chat.value
+        if (current == null || current.type != Chat.TYPE_DIRECT) {
+            _error.value = "Звонки доступны только в личных чатах"
+            return null
+        }
+        val otherUid = current.participants.firstOrNull { it != uid } ?: return null
+        val other = userRepository.getUser(otherUid) ?: return null
+        return runCatching { callRepository.startCall(me, other, video) }
+            .onFailure { _error.value = it.localizedMessage }
+            .getOrNull()
+    }
+
+    fun renameChat(title: String) {
+        viewModelScope.launch {
+            _busy.value = true
+            try {
+                chatRepository.updateChatTitle(chatId, title)
+            } catch (t: Throwable) {
+                _error.value = t.localizedMessage
+            } finally {
+                _busy.value = false
+            }
+        }
+    }
+
+    fun changeChatPhoto(uri: Uri) {
+        viewModelScope.launch {
+            _busy.value = true
+            try {
+                chatRepository.updateChatPhoto(chatId, uri)
+            } catch (t: Throwable) {
+                _error.value = t.localizedMessage ?: "Не удалось загрузить фото"
+            } finally {
+                _busy.value = false
+            }
+        }
+    }
+
+    fun clearChatPhoto() {
+        viewModelScope.launch {
+            _busy.value = true
+            try {
+                chatRepository.clearChatPhoto(chatId)
+            } catch (t: Throwable) {
+                _error.value = t.localizedMessage
+            } finally {
+                _busy.value = false
+            }
+        }
+    }
+
+    suspend fun deleteChatAndExit(): Boolean {
+        return runCatching { chatRepository.deleteChat(chatId) }
+            .onFailure { _error.value = it.localizedMessage }
+            .isSuccess
     }
 
     private var _pendingVoiceUri: Uri? = null

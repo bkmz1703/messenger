@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 import ru.ilyakirollov.messenger.data.model.Chat
 import ru.ilyakirollov.messenger.data.repository.AuthRepository
 import ru.ilyakirollov.messenger.data.repository.ChatRepository
@@ -27,4 +28,8 @@ class ChatsViewModel @Inject constructor(
             if (uid == null) flowOf(emptyList()) else chatRepository.observeChats(uid)
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    fun deleteChat(chatId: String) {
+        viewModelScope.launch { runCatching { chatRepository.deleteChat(chatId) } }
+    }
 }
