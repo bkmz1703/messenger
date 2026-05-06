@@ -76,6 +76,10 @@
     <string name="channel_readonly_notice">Только администратор канала может публиковать сообщения здесь.</string>
     <string name="error_nickname_taken">Этот ник уже занят</string>
 
+    <!-- Calls -->
+    <string name="call_new">Новый звонок</string>
+    <string name="search_no_results">Никого не нашли</string>
+
     <!-- Notification -->
     <string name="channel_messages_name">Сообщения</string>
     <string name="channel_messages_desc">Уведомления о новых сообщениях</string>
