@@ -80,6 +80,16 @@
     <string name="call_new">Новый звонок</string>
     <string name="search_no_results">Никого не нашли</string>
 
+    <!-- Phone auth -->
+    <string name="login_with_phone">Войти по номеру телефона</string>
+    <string name="phone_enter_number">Введите номер в формате +79161234567 — на него придёт SMS с кодом.</string>
+    <string name="phone_hint">Номер телефона</string>
+    <string name="phone_send_sms">Отправить SMS</string>
+    <string name="phone_enter_sms">Введите код из SMS, который пришёл на ваш номер.</string>
+    <string name="phone_sms_hint">Код из SMS</string>
+    <string name="phone_confirm">Подтвердить</string>
+    <string name="phone_pick_nickname">Готово! Осталось выбрать ник, под которым вас увидят другие.</string>
+
     <!-- Notification -->
     <string name="channel_messages_name">Сообщения</string>
     <string name="channel_messages_desc">Уведомления о новых сообщениях</string>

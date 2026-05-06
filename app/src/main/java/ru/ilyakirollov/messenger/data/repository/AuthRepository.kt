@@ -1,22 +1,44 @@
 package ru.ilyakirollov.messenger.data.repository
 
+import android.app.Activity
 import android.net.Uri
+import com.google.firebase.FirebaseException
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.auth.FirebaseAuthUserCollisionException
+import com.google.firebase.auth.PhoneAuthCredential
+import com.google.firebase.auth.PhoneAuthOptions
+import com.google.firebase.auth.PhoneAuthProvider
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.SetOptions
 import com.google.firebase.messaging.FirebaseMessaging
+import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.random.Random
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.tasks.await
 import ru.ilyakirollov.messenger.data.model.Chat
 import ru.ilyakirollov.messenger.data.model.User
 import ru.ilyakirollov.messenger.data.upload.CloudinaryResourceType
 import ru.ilyakirollov.messenger.data.upload.CloudinaryUploader
+
+/**
+ * Result of starting a phone-number verification: either we already got an auto-retrieved
+ * credential (Android dev with SafetyNet) or the user has to type in the SMS code.
+ */
+sealed interface PhoneStartResult {
+    /** SMS verification was instant: we already have a usable credential. */
+    data class AutoVerified(val credential: PhoneAuthCredential) : PhoneStartResult
+
+    /** SMS was sent. Pass the code the user types into [AuthRepository.confirmPhoneSms]. */
+    data class CodeSent(val verificationId: String) : PhoneStartResult
+
+    data class Failed(val message: String) : PhoneStartResult
+}
 
 @Singleton
 class AuthRepository @Inject constructor(
@@ -128,6 +150,114 @@ class AuthRepository @Inject constructor(
         val updates = mutableMapOf<String, Any>("online" to online)
         if (!online) updates["lastSeenAt"] = com.google.firebase.firestore.FieldValue.serverTimestamp()
         firestore.collection("users").document(uid).set(updates, SetOptions.merge()).await()
+    }
+
+    /**
+     * Kick off Firebase Phone Auth verification for [phoneE164] (e.g. "+79161234567"). Returns
+     * a [PhoneStartResult] describing whether the SMS was auto-verified, sent, or failed.
+     * Activity is required by Firebase for reCAPTCHA fallback / SafetyNet attestation.
+     */
+    suspend fun startPhoneVerification(activity: Activity, phoneE164: String): PhoneStartResult =
+        suspendCancellableCoroutine { cont ->
+            val callbacks = object : PhoneAuthProvider.OnVerificationStateChangedCallbacks() {
+                override fun onVerificationCompleted(credential: PhoneAuthCredential) {
+                    if (cont.isActive) cont.resumeWith(Result.success(PhoneStartResult.AutoVerified(credential)))
+                }
+                override fun onVerificationFailed(e: FirebaseException) {
+                    if (cont.isActive) cont.resumeWith(
+                        Result.success(PhoneStartResult.Failed(e.localizedMessage ?: "Не удалось отправить SMS")),
+                    )
+                }
+                override fun onCodeSent(verificationId: String, token: PhoneAuthProvider.ForceResendingToken) {
+                    if (cont.isActive) cont.resumeWith(Result.success(PhoneStartResult.CodeSent(verificationId)))
+                }
+            }
+            val options = PhoneAuthOptions.newBuilder(auth)
+                .setPhoneNumber(phoneE164)
+                .setTimeout(60L, TimeUnit.SECONDS)
+                .setActivity(activity)
+                .setCallbacks(callbacks)
+                .build()
+            PhoneAuthProvider.verifyPhoneNumber(options)
+        }
+
+    /**
+     * Sign in (or link to the current anonymous user) with the SMS code the user typed in for a
+     * previously-issued [verificationId]. Returns the resulting UID.
+     */
+    suspend fun confirmPhoneSms(verificationId: String, smsCode: String): String {
+        val credential = PhoneAuthProvider.getCredential(verificationId, smsCode)
+        return signInWithPhoneCredential(credential)
+    }
+
+    /**
+     * Apply [credential] to either link to the current anonymous account (preserving UID and
+     * therefore all existing chats) or sign in fresh if the phone number is already attached
+     * to another Firebase user.
+     */
+    suspend fun signInWithPhoneCredential(credential: PhoneAuthCredential): String {
+        val current = auth.currentUser
+        val uid = if (current != null && current.isAnonymous) {
+            try {
+                current.linkWithCredential(credential).await().user?.uid
+                    ?: error("Не удалось привязать номер к аккаунту")
+            } catch (e: FirebaseAuthUserCollisionException) {
+                // The phone is already on a real Firebase user: drop the empty anonymous one
+                // and sign in to the existing account.
+                auth.signOut()
+                auth.signInWithCredential(credential).await().user?.uid
+                    ?: error("Не удалось войти")
+            }
+        } else {
+            auth.signInWithCredential(credential).await().user?.uid
+                ?: error("Не удалось войти")
+        }
+        runCatching {
+            firestore.collection("users").document(uid).set(
+                mapOf("phoneNumber" to (auth.currentUser?.phoneNumber ?: "")),
+                SetOptions.merge(),
+            ).await()
+        }
+        return uid
+    }
+
+    /**
+     * After a fresh phone sign-in (no existing nickname yet), claim a nickname and create the
+     * user doc. Mirrors the body of [signInAnonymously] minus the auth step.
+     */
+    suspend fun completePhoneSignUp(nickname: String, color: Long): User {
+        val uid = currentUid ?: error("Не удалось войти")
+        val sanitized = nickname.trim()
+        require(sanitized.isNotBlank()) { "Никнейм не может быть пустым" }
+        require(sanitized.length in 2..32) { "Никнейм должен быть от 2 до 32 символов" }
+
+        val previousNickname = runCatching {
+            firestore.collection("users").document(uid).get().await().getString("nickname")
+        }.getOrNull()
+        claimNickname(uid, sanitized, previousNickname)
+
+        val token = runCatching { messaging.token.await() }.getOrNull()
+        val user = User(
+            uid = uid,
+            nickname = sanitized,
+            nicknameLower = sanitized.lowercase(),
+            avatarColor = color,
+            fcmToken = token,
+            online = true,
+        )
+        firestore.collection("users").document(uid).set(user, SetOptions.merge()).await()
+        propagateUserToChats(uid, sanitized, color, photoUrl = null)
+        runCatching { ensureOfficialChannel() }
+        runCatching { syncOfficialBroadcasterStatus(uid, sanitized, previousNickname) }
+        return user
+    }
+
+    /** True if the currently-signed-in user has a nickname stored in their Firestore profile. */
+    suspend fun currentNicknameOrNull(): String? {
+        val uid = currentUid ?: return null
+        return runCatching {
+            firestore.collection("users").document(uid).get().await().getString("nickname")
+        }.getOrNull()
     }
 
     /**

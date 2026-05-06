@@ -45,10 +45,27 @@ android {
         buildConfigField("String", "CLOUDINARY_UPLOAD_PRESET", "\"$cloudinaryUploadPreset\"")
     }
 
+    // Pin debug signing to a project-local keystore so the APK SHA-1 is reproducible across CI
+    // builds. Required for Firebase Phone Auth (the SHA-1 must be registered in the Firebase
+    // Android app config). The default ~/.android/debug.keystore is regenerated on every fresh
+    // CI runner, which would invalidate the registered fingerprint.
+    signingConfigs {
+        getByName("debug") {
+            val ks = file("debug.keystore")
+            if (ks.exists()) {
+                storeFile = ks
+                storePassword = "android"
+                keyAlias = "androiddebugkey"
+                keyPassword = "android"
+            }
+        }
+    }
+
     buildTypes {
         debug {
             isMinifyEnabled = false
             isDebuggable = true
+            signingConfig = signingConfigs.getByName("debug")
         }
         release {
             isMinifyEnabled = true

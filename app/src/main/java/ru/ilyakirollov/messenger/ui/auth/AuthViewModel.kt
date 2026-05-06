@@ -1,5 +1,6 @@
 package ru.ilyakirollov.messenger.ui.auth
 
+import android.app.Activity
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -13,11 +14,19 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import ru.ilyakirollov.messenger.data.prefs.UserPreferences
 import ru.ilyakirollov.messenger.data.repository.AuthRepository
+import ru.ilyakirollov.messenger.data.repository.PhoneStartResult
 
 sealed interface AuthState {
     data object Loading : AuthState
     data object Unauthenticated : AuthState
     data class Authenticated(val uid: String, val nickname: String, val avatarColor: Long) : AuthState
+}
+
+sealed interface PhoneAuthStep {
+    data object Idle : PhoneAuthStep
+    data object SendingSms : PhoneAuthStep
+    data class CodeSent(val verificationId: String) : PhoneAuthStep
+    data object NeedsNickname : PhoneAuthStep
 }
 
 @HiltViewModel
@@ -86,6 +95,103 @@ class AuthViewModel @Inject constructor(
         viewModelScope.launch {
             runCatching { authRepository.forgetAccount() }
             preferences.clear()
+        }
+    }
+
+    // ---- Phone auth ----
+
+    private val _phoneStep = MutableStateFlow<PhoneAuthStep>(PhoneAuthStep.Idle)
+    val phoneStep: StateFlow<PhoneAuthStep> = _phoneStep.asStateFlow()
+
+    fun resetPhoneFlow() {
+        _phoneStep.value = PhoneAuthStep.Idle
+        _error.value = null
+    }
+
+    fun startPhoneSignIn(activity: Activity, phoneE164: String) {
+        if (_busy.value) return
+        if (!phoneE164.startsWith("+") || phoneE164.length < 8) {
+            _error.value = "Введите номер в формате +79161234567"
+            return
+        }
+        _busy.value = true
+        _error.value = null
+        _phoneStep.value = PhoneAuthStep.SendingSms
+        viewModelScope.launch {
+            try {
+                when (val r = authRepository.startPhoneVerification(activity, phoneE164)) {
+                    is PhoneStartResult.AutoVerified -> {
+                        // Some Android devices auto-fetch the code: finish sign-in immediately.
+                        authRepository.signInWithPhoneCredential(r.credential)
+                        afterPhoneSignedIn()
+                    }
+                    is PhoneStartResult.CodeSent -> {
+                        _phoneStep.value = PhoneAuthStep.CodeSent(r.verificationId)
+                    }
+                    is PhoneStartResult.Failed -> {
+                        _error.value = r.message
+                        _phoneStep.value = PhoneAuthStep.Idle
+                    }
+                }
+            } catch (t: Throwable) {
+                _error.value = t.localizedMessage ?: "Не удалось отправить SMS"
+                _phoneStep.value = PhoneAuthStep.Idle
+            } finally {
+                _busy.value = false
+            }
+        }
+    }
+
+    fun confirmPhoneSms(smsCode: String) {
+        val step = _phoneStep.value
+        if (step !is PhoneAuthStep.CodeSent) return
+        if (smsCode.length < 4) {
+            _error.value = "Введите код из SMS"
+            return
+        }
+        if (_busy.value) return
+        _busy.value = true
+        _error.value = null
+        viewModelScope.launch {
+            try {
+                authRepository.confirmPhoneSms(step.verificationId, smsCode)
+                afterPhoneSignedIn()
+            } catch (t: Throwable) {
+                _error.value = t.localizedMessage ?: "Неверный код"
+            } finally {
+                _busy.value = false
+            }
+        }
+    }
+
+    private suspend fun afterPhoneSignedIn() {
+        // If the user already had a Firestore profile (anonymous → linked, or returning phone
+        // user), reuse the nickname. Otherwise prompt for a new one.
+        val existing = authRepository.currentNicknameOrNull()
+        if (!existing.isNullOrBlank()) {
+            preferences.setNickname(existing)
+            _phoneStep.value = PhoneAuthStep.Idle
+        } else {
+            _phoneStep.value = PhoneAuthStep.NeedsNickname
+        }
+    }
+
+    fun completePhoneSignUp(nickname: String) {
+        if (_busy.value) return
+        _busy.value = true
+        _error.value = null
+        viewModelScope.launch {
+            try {
+                val color = authRepository.randomAvatarColor()
+                val user = authRepository.completePhoneSignUp(nickname, color)
+                preferences.setNickname(user.nickname)
+                preferences.setAvatarColor(user.avatarColor)
+                _phoneStep.value = PhoneAuthStep.Idle
+            } catch (t: Throwable) {
+                _error.value = t.localizedMessage ?: "Не удалось завершить регистрацию"
+            } finally {
+                _busy.value = false
+            }
         }
     }
 }
